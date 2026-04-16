@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>도서관 인수인계 (공유버전)</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <style>
+        .category-wrapper {
+            background-color: #fff;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            transition: transform 0.2s;
+        }
+        .category-wrapper h3.list-title { cursor: grab; }
+        .category-wrapper h3.list-title:active { cursor: grabbing; }
+        .sortable-ghost-category {
+            opacity: 0.4; background-color: #e3f2fd; border: 2px dashed #007BFF;
+        }
+        /* 저장 상태 표시용 */
+        #saveStatus {
+            position: fixed; bottom: 20px; right: 20px;
+            background: #333; color: white; padding: 10px 20px;
+            border-radius: 20px; opacity: 0; transition: opacity 0.5s;
+        }
+    </style>
+</head>
+<body>
+    <h2>도서관 인수인계</h2>
+    <hr>
+
+    <div class="top-buttons">
+        <button onclick="openTimetableModal()" class="text-btn">
+            <i class="fas fa-calendar-alt"></i> 시간표 보기
+        </button>
+        <button onclick="openModal()" class="text-btn">
+            <i class="fas fa-bell"></i> 공지사항 다시보기
+        </button>
+        <span style="border-left: 1px solid #ccc; margin: 0 10px; height: 15px; display: inline-block; vertical-align: middle;"></span>
+        <button onclick="forceSave()" class="text-btn" style="color: green;">
+            <i class="fas fa-save"></i> 지금 저장 (서버)
+        </button>
+    </div>
+
+    <div class="description">항상 오시면 공지사항 한번씩 읽어주세요!!!!!<br>made by Yoon</div> <br>
+
+    <div class="list-container">
+        <div id="mainListContainer" class="main-list-container"></div>
+    </div>
+
+    <hr>
+    <div class="add-form">
+        <h3>내용 추가하기</h3>
+        <div class="form-row">
+            <label for="listType">목록 종류:</label>
+            <select id="listType">
+                <option value="newItem">새로운 항목 추가</option>
+                <option value="newCategory">새로운 목록 추가</option>
+                <option value="addDetail">상세 내용 추가</option>
+            </select>
+        </div>
+        <div class="form-row" id="category-row">
+            <label for="category">추가할 목록:</label>
+            <select id="category"></select>
+        </div>
+        <div class="form-row" id="subCategory-row" style="display: none;">
+            <label for="subCategory">상세 내용 추가:</label>
+            <select id="subCategory"></select>
+        </div>
+        <div class="form-row" id="newContent-row">
+            <label id="contentLabel" for="newContent">내용 입력:</label>
+            <input type="text" id="newContent" placeholder="추가할 내용을 입력하세요.">
+        </div>
+        <div class="form-row" id="subContent-row" style="display: none;">
+            <label for="subContent">상세 내용:</label>
+            <input type="text" id="subContent" placeholder="상세 내용을 입력하세요.">
+        </div>
+        <div class="form-row">
+            <button onclick="addListItem()">추가</button>
+        </div>
+    </div>
+
+    <div id="contextMenu" class="context-menu">
+        <div class="context-menu-item" onclick="editItem()">수정</div>
+        <div class="context-menu-item" onclick="deleteItem()">삭제</div>
+    </div>
+
+    <div id="noticeModal" class="modal-overlay">
+        <div class="modal-window">
+            <div class="modal-title"><i class="fas fa-exclamation-circle"></i> 필독 공지사항</div>
+            <div class="modal-content-text">
+               인수인계 잘 부탁드립니다.<br><strong>모르겠으면 중요전달사항에 적어주세요.</strong>
+            </div>
+            <button class="modal-close-btn" onclick="closeModal()">확인했습니다</button>
+        </div>
+    </div>
+
+    <div id="timetableModal" class="modal-overlay">
+        <div class="modal-window large-modal">
+            <div class="modal-title"><i class="fas fa-calendar-check"></i> 2026학년도 1학기 시간표</div>
+            <img src="/static/시간표.png" alt="도서관 시간표" class="timetable-image">
+            <button class="modal-close-btn" onclick="closeTimetableModal()">닫기</button>
+        </div>
+    </div>
+
+    <div id="saveStatus">저장되었습니다!</div>
+
+    <script>
+        const listTypeSelect = document.getElementById('listType');
+        const categorySelectRow = document.getElementById('category-row');
+        const categorySelect = document.getElementById('category');
+        const subCategorySelectRow = document.getElementById('subCategory-row');
+        const subCategorySelect = document.getElementById('subCategory');
+        const newContentRow = document.getElementById('newContent-row');
+        const newContentInput = document.getElementById('newContent');
+        const contentLabel = document.getElementById('contentLabel');
+        const subContentRow = document.getElementById('subContent-row');
+        const subContentInput = document.getElementById('subContent');
+        const contextMenu = document.getElementById('contextMenu');
+        const noticeModal = document.getElementById('noticeModal');
+        const timetableModal = document.getElementById('timetableModal');
+        const mainListContainer = document.getElementById('mainListContainer');
+
+        let currentTargetElement = null;
+        let itemIdCounter = 0;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadListItems(); // 서버에서 데이터 불러오기
+            updateFormVisibility();
+            attachEventListeners();
+            openModal();
+        });
+
+        // --- 모달 관련 함수들 ---
+        function openModal() { noticeModal.style.display = 'flex'; }
+        function closeModal() { noticeModal.style.display = 'none'; }
+        function openTimetableModal() { timetableModal.style.display = 'flex'; }
+        function closeTimetableModal() { timetableModal.style.display = 'none'; }
+        window.onclick = function(event) {
+            if (event.target == noticeModal) closeModal();
+            if (event.target == timetableModal) closeTimetableModal();
+        }
+
+        // --- UI 업데이트 함수들 ---
+        function updateFormVisibility() {
+            const listType = listTypeSelect.value;
+            categorySelectRow.style.display = 'none';
+            subCategorySelectRow.style.display = 'none';
+            newContentRow.style.display = 'flex';
+            subContentRow.style.display = 'flex';
+
+            if (listType === 'newCategory') {
+                newContentRow.style.display = 'flex';
+                subContentRow.style.display = 'none';
+                contentLabel.textContent = '목록 이름:';
+                newContentInput.placeholder = '새 목록 이름을 입력하세요.';
+            } else if (listType === 'addDetail') {
+                newContentRow.style.display = 'none';
+                categorySelectRow.style.display = 'none';
+                subCategorySelectRow.style.display = 'flex';
+                subContentRow.style.display = 'flex';
+                subContentInput.placeholder = '추가할 상세 내용을 입력하세요.';
+            } else {
+                categorySelectRow.style.display = 'flex';
+                subContentRow.style.display = 'none';
+                contentLabel.textContent = '내용 입력:';
+                newContentInput.placeholder = '추가할 내용을 입력하세요.';
+            }
+        }
+
+        function attachEventListeners() {
+            listTypeSelect.addEventListener('change', () => {
+                updateFormVisibility();
+                updateCategorySelect();
+                updateSubCategorySelect();
+            });
+
+            document.addEventListener('contextmenu', (e) => {
+                const target = e.target.closest('li, h3.list-title, .list-content-group > li');
+                if (target) {
+                    e.preventDefault();
+                    currentTargetElement = target;
+                    contextMenu.style.display = 'block';
+                    contextMenu.style.left = `${e.clientX}px`;
+                    contextMenu.style.top = `${e.clientY}px`;
+                } else {
+                    contextMenu.style.display = 'none';
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if(e.target.className !== 'modal-close-btn') {
+                    contextMenu.style.display = 'none';
+                }
+            });
+        }
+
+        function enableDragAndDrop() {
+            // 카테고리 이동
+            new Sortable(mainListContainer, {
+                animation: 150,
+                handle: 'h3.list-title',
+                ghostClass: 'sortable-ghost-category',
+                onEnd: function() { saveListItems(); }
+            });
+            // 아이템 이동
+            document.querySelectorAll('.item-list').forEach(ul => {
+                new Sortable(ul, {
+                    group: 'shared',
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    dragClass: 'sortable-drag',
+                    onEnd: function() { saveListItems(); }
+                });
+            });
+            // 서브 아이템 이동
+            document.querySelectorAll('.list-content-group').forEach(subUl => {
+                new Sortable(subUl, {
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    onEnd: function() { saveListItems(); }
+                });
+            });
+        }
+
+        function createCategoryWrapper(titleText) {
+            const wrapper = document.createElement('div');
+            wrapper.classList.add('category-wrapper');
+            const newH3 = document.createElement('h3');
+            newH3.classList.add('list-title');
+            newH3.textContent = titleText;
+            const newUl = document.createElement('ul');
+            newUl.classList.add('item-list');
+            wrapper.appendChild(newH3);
+            wrapper.appendChild(newUl);
+            return { wrapper, newUl };
+        }
+
+        // --- 추가/수정/삭제 로직 (UI 변경 + saveListItems 호출) ---
+        function addListItem() {
+            const listType = listTypeSelect.value;
+            const category = categorySelect.value;
+            const newContent = newContentInput.value.trim();
+            const subContent = subContentInput.value.trim();
+            const targetItemId = subCategorySelect.value;
+
+            if (listType === 'newCategory') {
+                if (newContent === '') return alert('목록 이름을 입력해주세요.');
+                const { wrapper, newUl } = createCategoryWrapper(newContent);
+                mainListContainer.appendChild(wrapper);
+                new Sortable(newUl, {
+                    group: 'shared', animation: 150, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag',
+                    onEnd: function() { saveListItems(); }
+                });
+            } else if (listType === 'addDetail') {
+                if (subContent === '') return alert('상세 내용을 입력해주세요.');
+                const targetLi = document.getElementById(targetItemId);
+                if (targetLi) {
+                    let subUl = targetLi.querySelector('ul.list-content-group');
+                    if (!subUl) {
+                        subUl = document.createElement('ul');
+                        subUl.classList.add('list-content-group');
+                        targetLi.appendChild(subUl);
+                        new Sortable(subUl, {
+                            animation: 150, ghostClass: 'sortable-ghost',
+                            onEnd: function() { saveListItems(); }
+                        });
+                    }
+                    const newDetailLi = document.createElement('li');
+                    newDetailLi.textContent = subContent;
+                    subUl.appendChild(newDetailLi);
+                } else alert('해당 항목을 찾을 수 없습니다.');
+            } else { // newItem
+                if (newContent === '') return alert('내용을 입력해주세요.');
+                let targetUl = null;
+                const h3s = document.querySelectorAll('h3.list-title');
+                for (let i = 0; i < h3s.length; i++) {
+                    if (h3s[i].textContent.trim() === category) {
+                        targetUl = h3s[i].nextElementSibling;
+                        break;
+                    }
+                }
+                if (targetUl) {
+                    const newLi = document.createElement('li');
+                    newLi.id = `item-${itemIdCounter++}`;
+                    const listHeader = document.createElement('div');
+                    listHeader.classList.add('list-header');
+                    const icon = document.createElement('i');
+                    icon.classList.add('list-icon');
+                    if (category === '안되는 사항') icon.classList.add('fas', 'fa-ban');
+                    else icon.classList.add('fas', 'fa-info-circle');
+
+                    listHeader.appendChild(icon);
+                    listHeader.appendChild(document.createTextNode(newContent));
+                    newLi.appendChild(listHeader);
+                    targetUl.appendChild(newLi);
+                    newLi.querySelector('.list-header').addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        toggleContent(newLi);
+                    });
+                } else alert('해당하는 카테고리를 찾을 수 없습니다.');
+            }
+            newContentInput.value = '';
+            subContentInput.value = '';
+            saveListItems();
+            updateCategorySelect();
+            updateSubCategorySelect();
+        }
+
+        function toggleContent(element) {
+            const content = element.querySelector('.list-content-group');
+            if (content) content.style.display = content.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function editItem() {
+            contextMenu.style.display = 'none';
+            if (!currentTargetElement) return;
+            const isTitle = currentTargetElement.tagName === 'H3';
+            const isDetail = currentTargetElement.closest('.list-content-group');
+
+            if (isTitle) {
+                const newText = prompt("새로운 목록 이름을 입력하세요:", currentTargetElement.textContent);
+                if (newText && newText.trim()) {
+                    currentTargetElement.textContent = newText;
+                    saveListItems();
+                    updateCategorySelect();
+                }
+            } else if (isDetail) {
+                const newSubText = prompt("새로운 상세 내용을 입력하세요:", currentTargetElement.textContent.trim());
+                if (newSubText && newSubText.trim()) {
+                    currentTargetElement.textContent = newSubText;
+                    saveListItems();
+                }
+            } else {
+                const mainTextElement = currentTargetElement.querySelector('.list-header');
+                if (mainTextElement) {
+                    const newMainText = prompt("새로운 내용을 입력하세요:", mainTextElement.textContent.trim());
+                    if (newMainText && newMainText.trim()) {
+                        mainTextElement.lastChild.textContent = newMainText; // 아이콘 유지
+                        saveListItems();
+                        updateSubCategorySelect();
+                    }
+                }
+            }
+        }
+
+        function deleteItem() {
+            contextMenu.style.display = 'none';
+            if (currentTargetElement && confirm("정말 삭제하시겠습니까?")) {
+                const isTitle = currentTargetElement.tagName === 'H3';
+                if (isTitle) {
+                    currentTargetElement.closest('.category-wrapper').remove();
+                } else {
+                    const parentUl = currentTargetElement.closest('ul');
+                    currentTargetElement.remove();
+                    if (parentUl && parentUl.querySelectorAll('li').length === 0 && parentUl.closest('.list-content-group')) {
+                        parentUl.remove();
+                    }
+                }
+                saveListItems();
+                updateCategorySelect();
+                updateSubCategorySelect();
+            }
+        }
+
+        function updateCategorySelect() {
+            const titles = document.querySelectorAll('.list-title');
+            categorySelect.innerHTML = '';
+            titles.forEach(title => {
+                const option = document.createElement('option');
+                option.value = title.textContent.trim();
+                option.textContent = title.textContent.trim();
+                categorySelect.appendChild(option);
+            });
+        }
+
+        function updateSubCategorySelect() {
+            const mainLists = document.querySelectorAll('.item-list > li');
+            subCategorySelect.innerHTML = '';
+            let hasItems = false;
+            mainLists.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item.id;
+                const headerText = item.querySelector('.list-header')?.textContent.trim() || '내용 없음';
+                option.textContent = headerText;
+                subCategorySelect.appendChild(option);
+                hasItems = true;
+            });
+            if (!hasItems) {
+                const option = document.createElement('option');
+                option.textContent = '추가할 항목이 없습니다.';
+                option.disabled = true;
+                subCategorySelect.appendChild(option);
+            }
+        }
+
+        // ==========================================
+        // ▼ 핵심: 서버(Python)와 통신하는 부분 ▼
+        // ==========================================
+
+        function showSaveStatus() {
+            const status = document.getElementById('saveStatus');
+            status.style.opacity = 1;
+            setTimeout(() => { status.style.opacity = 0; }, 1500);
+        }
+
+        // 데이터를 JSON으로 만들어 서버로 전송
+        function saveListItems() {
+            const data = [];
+            const wrappers = mainListContainer.querySelectorAll('.category-wrapper');
+            wrappers.forEach(wrapper => {
+                const h3 = wrapper.querySelector('h3.list-title');
+                const ul = wrapper.querySelector('ul.item-list');
+                if (h3 && ul) {
+                    const category = {
+                        type: 'category',
+                        name: h3.textContent.trim(),
+                        items: []
+                    };
+                    ul.querySelectorAll(':scope > li').forEach(itemLi => {
+                        const item = {
+                            type: 'item',
+                            id: itemLi.id,
+                            header: itemLi.querySelector('.list-header')?.textContent.trim() || '',
+                            details: []
+                        };
+                        const subUl = itemLi.querySelector('.list-content-group');
+                        if (subUl) {
+                            subUl.querySelectorAll('li').forEach(detailLi => {
+                                item.details.push(detailLi.textContent.trim());
+                            });
+                        }
+                        category.items.push(item);
+                    });
+                    data.push(category);
+                }
+            });
+
+            // fetch API를 사용해 파이썬 서버로 데이터 전송
+            fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                console.log('Saved to Server:', result);
+                showSaveStatus();
+            })
+            .catch(error => console.error('Error saving data:', error));
+        }
+
+        function forceSave() {
+            saveListItems();
+            alert('서버에 저장 요청을 보냈습니다.');
+        }
+
+        // 서버에서 데이터를 가져와 화면에 그리기
+        function loadListItems() {
+            fetch('/api/load')
+            .then(response => response.json())
+            .then(data => {
+                mainListContainer.innerHTML = ''; // 초기화
+                let maxId = 0;
+
+                if (data && data.length > 0) {
+                    data.forEach(category => {
+                        const { wrapper, newUl } = createCategoryWrapper(category.name);
+
+                        category.items.forEach(item => {
+                            const newLi = document.createElement('li');
+                            newLi.id = item.id;
+
+                            const listHeader = document.createElement('div');
+                            listHeader.classList.add('list-header');
+                            const icon = document.createElement('i');
+                            icon.classList.add('list-icon');
+                            if (category.name === '안되는 사항') icon.classList.add('fas', 'fa-ban');
+                            else icon.classList.add('fas', 'fa-info-circle');
+
+                            listHeader.appendChild(icon);
+                            listHeader.appendChild(document.createTextNode(item.header));
+                            newLi.appendChild(listHeader);
+
+                            if (item.details && item.details.length > 0) {
+                                const subUl = document.createElement('ul');
+                                subUl.classList.add('list-content-group');
+                                item.details.forEach(detail => {
+                                    const detailLi = document.createElement('li');
+                                    detailLi.textContent = detail;
+                                    subUl.appendChild(detailLi);
+                                });
+                                newLi.appendChild(subUl);
+                            }
+
+                            newLi.querySelector('.list-header').addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                toggleContent(newLi);
+                            });
+                            newUl.appendChild(newLi);
+
+                            const idNumber = parseInt(item.id.split('-')[1]);
+                            if (!isNaN(idNumber) && idNumber >= maxId) maxId = idNumber + 1;
+                        });
+                        mainListContainer.appendChild(wrapper);
+                    });
+                }
+                itemIdCounter = maxId;
+                updateCategorySelect();
+                updateSubCategorySelect();
+                enableDragAndDrop();
+            })
+            .catch(error => {
+                console.error('Error loading data:', error);
+                alert('서버에서 데이터를 불러오지 못했습니다.');
+            });
+        }
+    </script>
+</body>
+</html>
