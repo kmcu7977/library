@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>도서관 인수인계</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <style>
+        .category-wrapper {
+            background-color: #fff;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            transition: transform 0.2s;
+        }
+        .category-wrapper h3.list-title { cursor: grab; }
+        .category-wrapper h3.list-title:active { cursor: grabbing; }
+        .sortable-ghost-category {
+            opacity: 0.4; background-color: #e3f2fd; border: 2px dashed #007BFF;
+        }
+        #saveStatus {
+            position: fixed; bottom: 20px; right: 20px;
+            background: #333; color: white; padding: 10px 20px;
+            border-radius: 20px; opacity: 0; transition: opacity 0.5s;
+            z-index: 9999;
+        }
+        #timetableUploadArea {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <!-- 제목에 동적으로 층수가 표시되도록 ID 추가 -->
+    <h2 id="pageTitle">도서관 인수인계</h2>
+    <hr>
+
+    <div class="top-buttons">
+        <!-- 층 선택 페이지로 돌아가는 버튼 추가 -->
+        <button onclick="location.href='index.html'" class="text-btn">
+            <i class="fas fa-arrow-left"></i> 층 변경
+        </button>
+        <span style="border-left: 1px solid #ccc; margin: 0 10px; height: 15px; display: inline-block; vertical-align: middle;"></span>
+        
+        <button onclick="openTimetableModal()" class="text-btn">
+            <i class="fas fa-calendar-alt"></i> 시간표 보기
+        </button>
+        <button onclick="openModal()" class="text-btn">
+            <i class="fas fa-bell"></i> 공지사항 다시보기
+        </button>
+        <span style="border-left: 1px solid #ccc; margin: 0 10px; height: 15px; display: inline-block; vertical-align: middle;"></span>
+        <button onclick="forceSave()" class="text-btn" style="color: green;">
+            <i class="fas fa-save"></i> 지금 저장
+        </button>
+    </div>
+
+    <div class="description">항상 오시면 공지사항 한번씩 읽어주세요!!!!!<br>made by Yoon</div> <br>
+
+    <div class="list-container">
+        <div id="mainListContainer" class="main-list-container"></div>
+    </div>
+
+    <hr>
+    <div class="add-form">
+        <h3>내용 추가하기</h3>
+        <div class="form-row">
+            <label for="listType">목록 종류:</label>
+            <select id="listType">
+                <option value="newItem">새로운 항목 추가</option>
+                <option value="newCategory">새로운 목록 추가</option>
+                <option value="addDetail">상세 내용 추가</option>
+            </select>
+        </div>
+        <div class="form-row" id="category-row">
+            <label for="category">추가할 목록:</label>
+            <select id="category"></select>
+        </div>
+        <div class="form-row" id="subCategory-row" style="display: none;">
+            <label for="subCategory">상세 내용 추가:</label>
+            <select id="subCategory"></select>
+        </div>
+        <div class="form-row" id="newContent-row">
+            <label id="contentLabel" for="newContent">내용 입력:</label>
+            <input type="text" id="newContent" placeholder="추가할 내용을 입력하세요.">
+        </div>
+        <div class="form-row" id="subContent-row" style="display: none;">
+            <label for="subContent">상세 내용:</label>
+            <input type="text" id="subContent" placeholder="상세 내용을 입력하세요.">
+        </div>
+        <div class="form-row">
+            <button onclick="addListItem()">추가</button>
+        </div>
+    </div>
+
+    <div id="contextMenu" class="context-menu">
+        <div class="context-menu-item" onclick="editItem()">수정</div>
+        <div class="context-menu-item" onclick="deleteItem()">삭제</div>
+    </div>
+
+    <!-- 공지사항 모달 -->
+    <div id="noticeModal" class="modal-overlay">
+        <div class="modal-window">
+            <div class="modal-title"><i class="fas fa-exclamation-circle"></i> 필독 공지사항</div>
+            <div class="modal-content-text">
+               인수인계 잘 부탁드립니다.<br><strong>모르겠으면 중요전달사항에 적어주세요.</strong>
+            </div>
+            <button class="modal-close-btn" onclick="closeModal()">확인했습니다</button>
+        </div>
+    </div>
+
+    <!-- 시간표 모달 -->
+    <div id="timetableModal" class="modal-overlay">
+        <div class="modal-window large-modal">
+            <div class="modal-title"><i class="fas fa-calendar-check"></i> 2026학년도 1학기 시간표</div>
+            <img id="timetableImg" src="시간표.png" alt="도서관 시간표" class="timetable-image">
+            <div id="timetableUploadArea">
+                <input type="file" id="timetableFileInput" accept="image/*" style="display:none">
+                <button class="text-btn" onclick="document.getElementById('timetableFileInput').click()">
+                    <i class="fas fa-upload"></i> 시간표 변경
+                </button>
+                <span id="uploadStatus" style="font-size:0.85em; color:#777;"></span>
+            </div>
+            <button class="modal-close-btn" onclick="closeTimetableModal()">닫기</button>
+        </div>
+    </div>
+
+    <div id="saveStatus">저장되었습니다!</div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+        const firebaseConfig = {
+            databaseURL: "https://library-checklist-4ec86-default-rtdb.asia-southeast1.firebasedatabase.app"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        window._firebaseDb = db;
+        window._firebaseRef = ref;
+        window._firebaseSet = set;
+        window._firebaseGet = get;
+
+        // URL 파라미터에서 층수 정보 읽어오기 (기본값 2)
+        const urlParams = new URLSearchParams(window.location.search);
+        window.currentFloor = urlParams.get('floor') || '2'; 
+        
+        // 페이지 제목에 층수 반영
+        document.getElementById('pageTitle').textContent = `도서관 인수인계 - ${window.currentFloor}층`;
+        document.title = `도서관 인수인계 (${window.currentFloor}층)`;
+
+        // 페이지 로드 시 데이터 + 시간표 불러오기
+        window.addEventListener('DOMContentLoaded', () => {
+            loadListItems();
+            loadTimetable();
+            updateFormVisibility();
+            attachEventListeners();
+            openModal();
+        });
+    </script>
+
+    <script>
+        const listTypeSelect = document.getElementById('listType');
+        const categorySelectRow = document.getElementById('category-row');
+        const categorySelect = document.getElementById('category');
+        const subCategorySelectRow = document.getElementById('subCategory-row');
+        const subCategorySelect = document.getElementById('subCategory');
+        const newContentRow = document.getElementById('newContent-row');
+        const newContentInput = document.getElementById('newContent');
+        const contentLabel = document.getElementById('contentLabel');
+        const subContentRow = document.getElementById('subContent-row');
+        const subContentInput = document.getElementById('subContent');
+        const contextMenu = document.getElementById('contextMenu');
+        const noticeModal = document.getElementById('noticeModal');
+        const timetableModal = document.getElementById('timetableModal');
+        const mainListContainer = document.getElementById('mainListContainer');
+
+        let currentTargetElement = null;
+        let itemIdCounter = 0;
+
+        // --- 모달 ---
+        function openModal() { noticeModal.style.display = 'flex'; }
+        function closeModal() { noticeModal.style.display = 'none'; }
+        function openTimetableModal() { timetableModal.style.display = 'flex'; }
+        function closeTimetableModal() { timetableModal.style.display = 'none'; }
+        window.onclick = function(event) {
+            if (event.target == noticeModal) closeModal();
+            if (event.target == timetableModal) closeTimetableModal();
+        }
+
+        // --- 폼 UI 및 리스트 동작 --- (기존과 동일)
+        function updateFormVisibility() {
+            const listType = listTypeSelect.value;
+            categorySelectRow.style.display = 'none';
+            subCategorySelectRow.style.display = 'none';
+            newContentRow.style.display = 'flex';
+            subContentRow.style.display = 'flex';
+
+            if (listType === 'newCategory') {
+                newContentRow.style.display = 'flex';
+                subContentRow.style.display = 'none';
+                contentLabel.textContent = '목록 이름:';
+                newContentInput.placeholder = '새 목록 이름을 입력하세요.';
+            } else if (listType === 'addDetail') {
+                newContentRow.style.display = 'none';
+                categorySelectRow.style.display = 'none';
+                subCategorySelectRow.style.display = 'flex';
+                subContentRow.style.display = 'flex';
+                subContentInput.placeholder = '추가할 상세 내용을 입력하세요.';
+            } else {
+                categorySelectRow.style.display = 'flex';
+                subContentRow.style.display = 'none';
+                contentLabel.textContent = '내용 입력:';
+                newContentInput.placeholder = '추가할 내용을 입력하세요.';
+            }
+        }
+
+        function attachEventListeners() {
+            listTypeSelect.addEventListener('change', () => {
+                updateFormVisibility();
+                updateCategorySelect();
+                updateSubCategorySelect();
+            });
+
+            document.addEventListener('contextmenu', (e) => {
+                const target = e.target.closest('li, h3.list-title, .list-content-group > li');
+                if (target) {
+                    e.preventDefault();
+                    currentTargetElement = target;
+                    contextMenu.style.display = 'block';
+                    contextMenu.style.left = `${e.clientX}px`;
+                    contextMenu.style.top = `${e.clientY}px`;
+                } else {
+                    contextMenu.style.display = 'none';
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if(e.target.className !== 'modal-close-btn') {
+                    contextMenu.style.display = 'none';
+                }
+            });
+        }
+
+        function enableDragAndDrop() {
+            new Sortable(mainListContainer, {
+                animation: 150, handle: 'h3.list-title', ghostClass: 'sortable-ghost-category',
+                onEnd: function() { saveListItems(); }
+            });
+            document.querySelectorAll('.item-list').forEach(ul => {
+                new Sortable(ul, {
+                    group: 'shared', animation: 150, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag',
+                    onEnd: function() { saveListItems(); }
+                });
+            });
+            document.querySelectorAll('.list-content-group').forEach(subUl => {
+                new Sortable(subUl, {
+                    animation: 150, ghostClass: 'sortable-ghost',
+                    onEnd: function() { saveListItems(); }
+                });
+            });
+        }
+
+        function createCategoryWrapper(titleText) {
+            const wrapper = document.createElement('div');
+            wrapper.classList.add('category-wrapper');
+            const newH3 = document.createElement('h3');
+            newH3.classList.add('list-title');
+            newH3.textContent = titleText;
+            const newUl = document.createElement('ul');
+            newUl.classList.add('item-list');
+            wrapper.appendChild(newH3);
+            wrapper.appendChild(newUl);
+            return { wrapper, newUl };
+        }
+
+        function addListItem() {
+            const listType = listTypeSelect.value;
+            const category = categorySelect.value;
+            const newContent = newContentInput.value.trim();
+            const subContent = subContentInput.value.trim();
+            const targetItemId = subCategorySelect.value;
+
+            if (listType === 'newCategory') {
+                if (newContent === '') return alert('목록 이름을 입력해주세요.');
+                const { wrapper, newUl } = createCategoryWrapper(newContent);
+                mainListContainer.appendChild(wrapper);
+                new Sortable(newUl, {
+                    group: 'shared', animation: 150, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag',
+                    onEnd: function() { saveListItems(); }
+                });
+            } else if (listType === 'addDetail') {
+                if (subContent === '') return alert('상세 내용을 입력해주세요.');
+                const targetLi = document.getElementById(targetItemId);
+                if (targetLi) {
+                    let subUl = targetLi.querySelector('ul.list-content-group');
+                    if (!subUl) {
+                        subUl = document.createElement('ul');
+                        subUl.classList.add('list-content-group');
+                        targetLi.appendChild(subUl);
+                        new Sortable(subUl, {
+                            animation: 150, ghostClass: 'sortable-ghost', onEnd: function() { saveListItems(); }
+                        });
+                    }
+                    const newDetailLi = document.createElement('li');
+                    newDetailLi.textContent = subContent;
+                    subUl.appendChild(newDetailLi);
+                } else alert('해당 항목을 찾을 수 없습니다.');
+            } else {
+                if (newContent === '') return alert('내용을 입력해주세요.');
+                let targetUl = null;
+                const h3s = document.querySelectorAll('h3.list-title');
+                for (let i = 0; i < h3s.length; i++) {
+                    if (h3s[i].textContent.trim() === category) {
+                        targetUl = h3s[i].nextElementSibling;
+                        break;
+                    }
+                }
+                if (targetUl) {
+                    const newLi = document.createElement('li');
+                    newLi.id = `item-${itemIdCounter++}`;
+                    const listHeader = document.createElement('div');
+                    listHeader.classList.add('list-header');
+                    const icon = document.createElement('i');
+                    icon.classList.add('list-icon');
+                    if (category === '안되는 사항') icon.classList.add('fas', 'fa-ban');
+                    else icon.classList.add('fas', 'fa-info-circle');
+                    listHeader.appendChild(icon);
+                    listHeader.appendChild(document.createTextNode(newContent));
+                    newLi.appendChild(listHeader);
+                    targetUl.appendChild(newLi);
+                    newLi.querySelector('.list-header').addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        toggleContent(newLi);
+                    });
+                } else alert('해당하는 카테고리를 찾을 수 없습니다.');
+            }
+            newContentInput.value = '';
+            subContentInput.value = '';
+            saveListItems();
+            updateCategorySelect();
+            updateSubCategorySelect();
+        }
+
+        function toggleContent(element) {
+            const content = element.querySelector('.list-content-group');
+            if (content) content.style.display = content.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function editItem() {
+            contextMenu.style.display = 'none';
+            if (!currentTargetElement) return;
+            const isTitle = currentTargetElement.tagName === 'H3';
+            const isDetail = currentTargetElement.closest('.list-content-group');
+
+            if (isTitle) {
+                const newText = prompt("새로운 목록 이름을 입력하세요:", currentTargetElement.textContent);
+                if (newText && newText.trim()) {
+                    currentTargetElement.textContent = newText;
+                    saveListItems();
+                    updateCategorySelect();
+                }
+            } else if (isDetail) {
+                const newSubText = prompt("새로운 상세 내용을 입력하세요:", currentTargetElement.textContent.trim());
+                if (newSubText && newSubText.trim()) {
+                    currentTargetElement.textContent = newSubText;
+                    saveListItems();
+                }
+            } else {
+                const mainTextElement = currentTargetElement.querySelector('.list-header');
+                if (mainTextElement) {
+                    const newMainText = prompt("새로운 내용을 입력하세요:", mainTextElement.lastChild.textContent.trim());
+                    if (newMainText && newMainText.trim()) {
+                        mainTextElement.lastChild.textContent = newMainText;
+                        saveListItems();
+                        updateSubCategorySelect();
+                    }
+                }
+            }
+        }
+
+        function deleteItem() {
+            contextMenu.style.display = 'none';
+            if (currentTargetElement && confirm("정말 삭제하시겠습니까?")) {
+                const isTitle = currentTargetElement.tagName === 'H3';
+                if (isTitle) {
+                    currentTargetElement.closest('.category-wrapper').remove();
+                } else {
+                    const parentUl = currentTargetElement.closest('ul');
+                    currentTargetElement.remove();
+                    if (parentUl && parentUl.querySelectorAll('li').length === 0 && parentUl.closest('.list-content-group')) {
+                        parentUl.remove();
+                    }
+                }
+                saveListItems();
+                updateCategorySelect();
+                updateSubCategorySelect();
+            }
+        }
+
+        function updateCategorySelect() {
+            const titles = document.querySelectorAll('.list-title');
+            categorySelect.innerHTML = '';
+            titles.forEach(title => {
+                const option = document.createElement('option');
+                option.value = title.textContent.trim();
+                option.textContent = title.textContent.trim();
+                categorySelect.appendChild(option);
+            });
+        }
+
+        function updateSubCategorySelect() {
+            const mainLists = document.querySelectorAll('.item-list > li');
+            subCategorySelect.innerHTML = '';
+            let hasItems = false;
+            mainLists.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item.id;
+                const headerText = item.querySelector('.list-header')?.textContent.trim() || '내용 없음';
+                option.textContent = headerText;
+                subCategorySelect.appendChild(option);
+                hasItems = true;
+            });
+            if (!hasItems) {
+                const option = document.createElement('option');
+                option.textContent = '추가할 항목이 없습니다.';
+                option.disabled = true;
+                subCategorySelect.appendChild(option);
+            }
+        }
+
+        // ==========================================
+        // Firebase 통신
+        // ==========================================
+
+        function showSaveStatus() {
+            const status = document.getElementById('saveStatus');
+            status.style.opacity = 1;
+            setTimeout(() => { status.style.opacity = 0; }, 1500);
+        }
+
+        function waitForFirebase(callback) {
+            if (window._firebaseDb) {
+                callback();
+            } else {
+                setTimeout(() => waitForFirebase(callback), 100);
+            }
+        }
+
+        function saveListItems() {
+            waitForFirebase(() => {
+                const data = [];
+                const wrappers = mainListContainer.querySelectorAll('.category-wrapper');
+                wrappers.forEach(wrapper => {
+                    const h3 = wrapper.querySelector('h3.list-title');
+                    const ul = wrapper.querySelector('ul.item-list');
+                    if (h3 && ul) {
+                        const category = { type: 'category', name: h3.textContent.trim(), items: [] };
+                        ul.querySelectorAll(':scope > li').forEach(itemLi => {
+                            const item = {
+                                type: 'item',
+                                id: itemLi.id,
+                                header: itemLi.querySelector('.list-header')?.textContent.trim() || '',
+                                details: []
+                            };
+                            const subUl = itemLi.querySelector('.list-content-group');
+                            if (subUl) {
+                                subUl.querySelectorAll('li').forEach(detailLi => {
+                                    item.details.push(detailLi.textContent.trim());
+                                });
+                            }
+                            category.items.push(item);
+                        });
+                        data.push(category);
+                    }
+                });
+
+                // ★ 수정된 부분: 선택된 층수(currentFloor)에 따라 저장 경로 다르게 설정
+                const dbPath = `checklists/floor${window.currentFloor}`;
+                const dbRef = window._firebaseRef(window._firebaseDb, dbPath);
+                
+                window._firebaseSet(dbRef, data)
+                    .then(() => { showSaveStatus(); })
+                    .catch(err => console.error('저장 실패:', err));
+            });
+        }
+
+        function forceSave() {
+            saveListItems();
+            alert('저장 요청을 보냈습니다.');
+        }
+
+        function loadListItems() {
+            waitForFirebase(() => {
+                // ★ 수정된 부분: 선택된 층수(currentFloor)에 따라 불러올 경로 다르게 설정
+                const dbPath = `checklists/floor${window.currentFloor}`;
+                const dbRef = window._firebaseRef(window._firebaseDb, dbPath);
+                
+                window._firebaseGet(dbRef).then(snapshot => {
+                    mainListContainer.innerHTML = '';
+                    let maxId = 0;
+                    const data = snapshot.val();
+
+                    if (!data) return;
+
+                    const dataArray = Array.isArray(data) ? data : Object.values(data);
+
+                    dataArray.forEach(category => {
+                        const { wrapper, newUl } = createCategoryWrapper(category.name);
+                        
+                        if (category.items && Array.isArray(category.items)) {
+                            category.items.forEach(item => {
+                                const newLi = document.createElement('li');
+                                newLi.id = item.id;
+                                const listHeader = document.createElement('div');
+                                listHeader.classList.add('list-header');
+                                const icon = document.createElement('i');
+                                icon.classList.add('list-icon');
+                                
+                                if (category.name === '안되는 사항') icon.classList.add('fas', 'fa-ban');
+                                else icon.classList.add('fas', 'fa-info-circle');
+                                
+                                listHeader.appendChild(icon);
+                                listHeader.appendChild(document.createTextNode(item.header || ''));
+                                newLi.appendChild(listHeader);
+
+                                if (item.details && Array.isArray(item.details)) {
+                                    const subUl = document.createElement('ul');
+                                    subUl.classList.add('list-content-group');
+                                    item.details.forEach(detail => {
+                                        const detailLi = document.createElement('li');
+                                        detailLi.textContent = detail;
+                                        subUl.appendChild(detailLi);
+                                    });
+                                    newLi.appendChild(subUl);
+                                }
+
+                                newLi.querySelector('.list-header').addEventListener('click', (e) => {
+                                    e.stopPropagation();
+                                    toggleContent(newLi);
+                                });
+                                newUl.appendChild(newLi);
+
+                                if (item.id) {
+                                    const idNumber = parseInt(item.id.split('-')[1]);
+                                    if (!isNaN(idNumber) && idNumber >= maxId) maxId = idNumber + 1;
+                                }
+                            });
+                        }
+                        mainListContainer.appendChild(wrapper);
+                    });
+                    
+                    itemIdCounter = maxId;
+                    updateCategorySelect();
+                    updateSubCategorySelect();
+                    enableDragAndDrop();
+                }).catch(err => {
+                    console.error('불러오기 실패:', err);
+                });
+            });
+        }
+
+        // ==========================================
+        // 시간표 Base64 저장/불러오기 (기존과 완전히 동일 - 모든 층 공유)
+        // ==========================================
+
+        function loadTimetable() {
+            waitForFirebase(() => {
+                const dbRef = window._firebaseRef(window._firebaseDb, 'timetable');
+                window._firebaseGet(dbRef).then(snapshot => {
+                    const data = snapshot.val();
+                    if (data && data.imageBase64) {
+                        document.getElementById('timetableImg').src = data.imageBase64;
+                    }
+                });
+            });
+        }
+
+        document.getElementById('timetableFileInput').addEventListener('change', function() {
+            const file = this.files[0];
+            if (!file) return;
+
+            if (file.size > 10 * 1024 * 1024) {
+                alert('파일이 너무 큽니다. 10MB 이하 이미지를 사용해주세요.');
+                return;
+            }
+
+            const status = document.getElementById('uploadStatus');
+            status.textContent = '업로드 중...';
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64 = e.target.result;
+
+                waitForFirebase(() => {
+                    const dbRef = window._firebaseRef(window._firebaseDb, 'timetable');
+                    window._firebaseSet(dbRef, { imageBase64: base64 })
+                        .then(() => {
+                            document.getElementById('timetableImg').src = base64;
+                            status.textContent = '✅ 변경 완료!';
+                            setTimeout(() => status.textContent = '', 3000);
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            status.textContent = '❌ 업로드 실패';
+                        });
+                });
+            };
+            reader.readAsDataURL(file);
+        });
+    </script>
+</body>
+</html>
