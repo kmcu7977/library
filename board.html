@@ -25,7 +25,7 @@
             border-radius: 20px; opacity: 0; transition: opacity 0.5s;
             z-index: 9999;
         }
-        .sheet { width: 100%; border-collapse: collapse; font-size: 0.95em; }
+        .sheet { width: 100%; border-collapse: collapse; font-size: 0.95em; table-layout: fixed; }
         .sheet th, .sheet td { border: 1px solid #c8d0da; padding: 0; }
         .sheet th { background: #f0f4f8; padding: 8px; font-weight: 600; text-align: center; }
         .sheet td input { width: 100%; border: none; padding: 8px; box-sizing: border-box; font: inherit; background: transparent; }
@@ -153,10 +153,10 @@
 
     <!-- 민원정리 모달 -->
     <div id="complaintModal" class="modal-overlay">
-        <div class="modal-window large-modal" style="max-width: 900px;">
+        <div class="modal-window large-modal" style="max-width: 1100px;">
             <div class="modal-title"><i class="fas fa-table"></i> 민원정리</div>
             <table id="complaintTable" class="sheet">
-                <thead><tr><th style="width:140px">날짜</th><th style="width:130px">학번</th><th style="width:110px">이름</th><th>비고</th><th style="width:36px"></th></tr></thead>
+                <thead><tr><th style="width:135px">날짜</th><th style="width:95px">학번</th><th style="width:80px">이름</th><th>비고</th><th style="width:36px"></th></tr></thead>
                 <tbody></tbody>
             </table>
             <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
