@@ -25,6 +25,15 @@
             border-radius: 20px; opacity: 0; transition: opacity 0.5s;
             z-index: 9999;
         }
+        .sheet { width: 100%; border-collapse: collapse; font-size: 0.95em; }
+        .sheet th, .sheet td { border: 1px solid #c8d0da; padding: 0; }
+        .sheet th { background: #f0f4f8; padding: 8px; font-weight: 600; text-align: center; }
+        .sheet td input { width: 100%; border: none; padding: 8px; box-sizing: border-box; font: inherit; background: transparent; }
+        .sheet td input:focus { outline: 2px solid #007BFF; outline-offset: -2px; background: #eaf3ff; }
+        .sheet td.del { text-align: center; }
+        .sheet td.del button { border: none; background: none; color: #bbb; cursor: pointer; padding: 8px; }
+        .sheet td.del button:hover { color: #dc3545; }
+        .sheet tbody:empty::after { content: "등록된 민원이 없습니다. [행 추가]를 눌러주세요."; display: block; padding: 16px; color: #999; text-align: center; }
         #timetableUploadArea {
             margin: 10px 0;
             display: flex;
@@ -51,6 +60,9 @@
         </button>
         <button onclick="openModal()" class="text-btn">
             <i class="fas fa-bell"></i> 공지사항 다시보기
+        </button>
+        <button onclick="openComplaintModal()" class="text-btn">
+            <i class="fas fa-table"></i> 민원정리
         </button>
         <span style="border-left: 1px solid #ccc; margin: 0 10px; height: 15px; display: inline-block; vertical-align: middle;"></span>
         <button onclick="forceSave()" class="text-btn" style="color: green;">
@@ -139,6 +151,21 @@
         </div>
     </div>
 
+    <!-- 민원정리 모달 -->
+    <div id="complaintModal" class="modal-overlay">
+        <div class="modal-window large-modal" style="max-width: 900px;">
+            <div class="modal-title"><i class="fas fa-table"></i> 민원정리</div>
+            <table id="complaintTable" class="sheet">
+                <thead><tr><th style="width:140px">날짜</th><th style="width:130px">학번</th><th style="width:110px">이름</th><th>비고</th><th style="width:36px"></th></tr></thead>
+                <tbody></tbody>
+            </table>
+            <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
+                <button class="text-btn" onclick="addComplaintRow()" style="color: #007BFF; font-weight: bold;"><i class="fas fa-plus"></i> 행 추가</button>
+                <button class="modal-close-btn" onclick="closeComplaintModal()">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <div id="saveStatus">저장되었습니다!</div>
 
     <!-- Firebase SDK -->
@@ -171,6 +198,7 @@
             loadListItems();
             loadTimetable();
             loadNoticeFromDB(); // 공지사항 불러오기 추가됨
+            loadComplaints();
             updateFormVisibility();
             attachEventListeners();
             openModal();
@@ -217,6 +245,7 @@
         window.onclick = function(event) {
             if (event.target == noticeModal) closeModal();
             if (event.target == timetableModal) closeTimetableModal();
+            if (event.target == complaintModal) closeComplaintModal();
         }
 
         // --- 폼 UI 및 리스트 동작 ---
@@ -681,6 +710,63 @@
                 window._firebaseSet(dbRef, { text: content })
                     .then(() => showSaveStatus())
                     .catch(err => console.error('공지사항 저장 실패:', err));
+            });
+        }
+
+        // ==========================================
+        // 민원정리 (전 층 공유, 경로 complaints)
+        // ==========================================
+        const complaintModal = document.getElementById('complaintModal');
+        const complaintBody = document.querySelector('#complaintTable tbody');
+        const COMPLAINT_FIELDS = ['date', 'sid', 'name', 'note'];
+
+        function openComplaintModal() { complaintModal.style.display = 'flex'; }
+        function closeComplaintModal() { complaintModal.style.display = 'none'; }
+
+        function addComplaintRow(row = {}) {
+            const tr = document.createElement('tr');
+            COMPLAINT_FIELDS.forEach(f => {
+                const td = document.createElement('td');
+                const input = document.createElement('input');
+                input.type = f === 'date' ? 'date' : 'text';
+                input.dataset.field = f;
+                input.value = row[f] ?? (f === 'date' ? new Date().toISOString().slice(0, 10) : '');
+                input.addEventListener('change', saveComplaints);
+                td.appendChild(input);
+                tr.appendChild(td);
+            });
+            const del = document.createElement('td');
+            del.className = 'del';
+            del.innerHTML = '<button title="삭제"><i class="fas fa-times"></i></button>';
+            del.querySelector('button').onclick = () => {
+                if (confirm('이 행을 삭제하시겠습니까?')) { tr.remove(); saveComplaints(); }
+            };
+            tr.appendChild(del);
+            complaintBody.appendChild(tr);
+            if (!Object.keys(row).length) tr.querySelector('[data-field=sid]').focus();
+        }
+
+        function readComplaints() {
+            return [...complaintBody.rows].map(tr =>
+                Object.fromEntries(COMPLAINT_FIELDS.map(f => [f, tr.querySelector(`[data-field=${f}]`).value.trim()]))
+            );
+        }
+
+        function saveComplaints() {
+            waitForFirebase(() => {
+                window._firebaseSet(window._firebaseRef(window._firebaseDb, 'complaints'), readComplaints())
+                    .then(showSaveStatus)
+                    .catch(err => console.error('민원 저장 실패:', err));
+            });
+        }
+
+        function loadComplaints() {
+            waitForFirebase(() => {
+                window._firebaseGet(window._firebaseRef(window._firebaseDb, 'complaints')).then(snapshot => {
+                    const data = snapshot.val();
+                    if (!data) return;
+                    (Array.isArray(data) ? data : Object.values(data)).forEach(addComplaintRow);
+                }).catch(err => console.error('민원 불러오기 실패:', err));
             });
         }
 
