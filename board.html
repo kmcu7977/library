@@ -126,7 +126,7 @@
     <!-- 시간표 모달 -->
     <div id="timetableModal" class="modal-overlay">
         <div class="modal-window large-modal">
-            <div class="modal-title"><i class="fas fa-calendar-check"></i> 2026학년도 1학기 시간표</div>
+            <div class="modal-title"><i class="fas fa-calendar-check"></i> <span id="timetableTitle">시간표</span></div>
             <img id="timetableImg" src="시간표.png" alt="도서관 시간표" class="timetable-image">
             <div id="timetableUploadArea">
                 <input type="file" id="timetableFileInput" accept="image/*" style="display:none">
@@ -205,6 +205,13 @@
             }
             noticeModal.style.display = 'none'; 
         }
+        // 3/1~8/31 = 1학기, 9/1~2월말 = 직전 학년도 2학기
+        function semesterLabel(d = new Date()) {
+            const m = d.getMonth() + 1;
+            const year = m >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+            return `${year}학년도 ${m >= 3 && m <= 8 ? 1 : 2}학기 시간표`;
+        }
+        document.getElementById('timetableTitle').textContent = semesterLabel();
         function openTimetableModal() { timetableModal.style.display = 'flex'; }
         function closeTimetableModal() { timetableModal.style.display = 'none'; }
         window.onclick = function(event) {
