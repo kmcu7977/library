@@ -156,7 +156,7 @@
         <div class="modal-window large-modal" style="max-width: 1100px;">
             <div class="modal-title"><i class="fas fa-table"></i> 민원정리</div>
             <table id="complaintTable" class="sheet">
-                <thead><tr><th style="width:118px">날짜</th><th style="width:86px">학번</th><th style="width:74px">이름</th><th>비고</th><th style="width:36px"></th></tr></thead>
+                <thead><tr><th style="width:118px">날짜</th><th style="width:86px">학번</th><th style="width:74px">이름</th><th style="width:130px">전화번호</th><th>비고</th><th style="width:36px"></th></tr></thead>
                 <tbody></tbody>
             </table>
             <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
@@ -718,7 +718,7 @@
         // ==========================================
         const complaintModal = document.getElementById('complaintModal');
         const complaintBody = document.querySelector('#complaintTable tbody');
-        const COMPLAINT_FIELDS = ['date', 'sid', 'name', 'note'];
+        const COMPLAINT_FIELDS = ['date', 'sid', 'name', 'phone', 'note'];
 
         function openComplaintModal() { complaintModal.style.display = 'flex'; }
         function closeComplaintModal() { complaintModal.style.display = 'none'; }
@@ -728,7 +728,7 @@
             COMPLAINT_FIELDS.forEach(f => {
                 const td = document.createElement('td');
                 const input = document.createElement('input');
-                input.type = f === 'date' ? 'date' : 'text';
+                input.type = f === 'date' ? 'date' : f === 'phone' ? 'tel' : 'text';
                 input.dataset.field = f;
                 input.value = row[f] ?? (f === 'date' ? new Date().toISOString().slice(0, 10) : '');
                 input.addEventListener('change', saveComplaints);
